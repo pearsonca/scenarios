@@ -4,12 +4,13 @@
 #' @description
 #' Extract scenario table from a full table of parameters, settings, etc.
 #'
-#' @param dt a [data.table()] of parameter / settings
+#' @param data a [data.table()] of parameter / settings
 #'
 #' @param exclude column names to exclude. defaults to [data.table::key()] of `dt`
 #'
 #' @param orderby for the output, what column priority to order on, which
-#' determines the scenario labeling order.
+#' determines the scenario labeling order. By default, the current order of the
+#' non-`exclude`d columns of `data`
 #'
 #' @details
 #' This method extracts the unique scenario set from a parameter table. It is
@@ -45,6 +46,28 @@ scn_extract <- function(
   setkeyv(scen_dt, c("scen_id", key(scen_dt)))
   setcolorder(scen_dt)
   return(scen_dt[])
+}
+
+#' @title Convert Data to be Keyed by Scenario
+#'
+#' This method takes data which has existing scenario columns, and returns that
+#' data converted to be in terms of the scenario keys.
+#'
+#' @param data a data.table, such as might be provided to [scn_extract()]
+#'
+#' @param scen_dt a data.table, meeting the return criteria of [scn_extract()]
+#'
+#' @param keep the columns to keep; by default, all of the columns that columns
+#' that are *not* defining scenarios.
+#'
+#' @return a data.table, with columns `keep` + `scen_id`
+#'
+#' @export
+scn_convert <- function(
+  data, scen_dt, keep = setdiff(names(data), names(scen_dt))
+) {
+  scencols <- setdiff(names(scen_dt), "scen_id")
+  data[scen_dt, on = scencols][, .SD, .SDcols = keep]
 }
 
 #' @title Create a Scenario Analysis Plan
