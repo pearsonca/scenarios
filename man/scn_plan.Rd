@@ -15,7 +15,10 @@ by this argument. The scenarios with the corresponding values for these names
 become the reference values}
 
 \item{ignore}{other columns that can be ignored when matching \code{baseline}. The
-\code{scen_id} column is always automatically ignored}
+\code{scen_id} column is always automatically ignored. This is useful when some of
+your scenario features are irrelevant when running the baseline scenario
+(e.g. vaccine efficacy, when no vaccine is distributed in the baseline case)
+and therefore there are not any corresponding baseline runs with this feature}
 }
 \value{
 a data.table, with columns \code{comp}(arison) and \code{base}(line), both

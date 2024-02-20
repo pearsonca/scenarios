@@ -9,13 +9,32 @@ scn_analyze(
   plan,
   compare,
   summarize,
-  inputs,
-  group,
-  joinon = setdiff(names(outcomes), inputs)
+  group = list(compare = c(), summarize = c()),
+  joinon = key(outcomes)
 )
 }
 \arguments{
-\item{outcomes_dt}{a set of outputs, as produced by \code{\link[=scn_outcomes]{scn_outcomes()}}}
+\item{outcomes}{a set of outputs, as produced by \code{\link[=scn_outcomes]{scn_outcomes()}}}
+
+\item{plan}{pairwise scenario ids, as produced by \code{\link[=scn_plan]{scn_plan()}}: the
+comparison plan}
+
+\item{compare}{optional, a list; names correspond to columns that will be
+created, and the elements should be expressions to evaluate. \code{compare}
+operations should be vectorized, but can use aggregating elements, and will
+be applied by scenario pairs and any \code{group} argument.}
+
+\item{summarize}{optional, a list; names correspond to columns that will be
+created and the elements should be expressions to evaluate. The operations
+should yield scalar results per group. This will be evaluated after \code{compare}
+so any columns it creates will be available.}
+
+\item{group}{when performing compare or summarize operations, how to group
+those operations for any group-wise calculations. Operations are always
+performed by scenario id pairs, and this parameter is for additional grouping}
+}
+\value{
+a data.table
 }
 \description{
 Conduct a scenario analysis according to a particular comparison plan, for

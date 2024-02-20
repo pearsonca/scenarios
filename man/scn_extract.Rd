@@ -11,12 +11,13 @@ scn_extract(
 )
 }
 \arguments{
+\item{data}{a \code{\link[=data.table]{data.table()}} of parameter / settings}
+
 \item{exclude}{column names to exclude. defaults to \code{\link[data.table:setkey]{data.table::key()}} of \code{dt}}
 
 \item{orderby}{for the output, what column priority to order on, which
-determines the scenario labeling order.}
-
-\item{dt}{a \code{\link[=data.table]{data.table()}} of parameter / settings}
+determines the scenario labeling order. By default, the current order of the
+non-\code{exclude}d columns of \code{data}}
 }
 \value{
 a \code{\link[=data.table]{data.table()}} with an \code{id} column and where all other columns form
@@ -26,13 +27,13 @@ the unique combinations of the non-excluded columns in dt.
 Extract scenario table from a full table of parameters, settings, etc.
 }
 \details{
-This method extracts the unique scenario set from a parameter table. It is
-easiest to use on a data.table, that already has a key, where that key
-is like a primary key in a relational data sense.
+This method extracts the unique scenario set from tabular data. It is
+easiest to use on a \code{data.table}, that already has a key, where that key
+is like a \href{https://en.wikipedia.org/wiki/Primary_key}{primary key in a relational data sense}.
 
 Note: if your data already have something like a scenario table, you don't
 need to use this method, but you should make sure that scenario table
-conforms to the return value for this function: an \code{id} column, and all the
+conforms to the return value for this function: \code{scen_id} column, and all the
 unique combinations of feature columns.
 }
 \examples{

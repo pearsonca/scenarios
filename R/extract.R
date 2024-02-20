@@ -13,13 +13,13 @@
 #' non-`exclude`d columns of `data`
 #'
 #' @details
-#' This method extracts the unique scenario set from a parameter table. It is
-#' easiest to use on a data.table, that already has a key, where that key
-#' is like a primary key in a relational data sense.
+#' This method extracts the unique scenario set from tabular data. It is
+#' easiest to use on a `data.table`, that already has a key, where that key
+#' is like a [primary key in a relational data sense](https://en.wikipedia.org/wiki/Primary_key).
 #'
 #' Note: if your data already have something like a scenario table, you don't
 #' need to use this method, but you should make sure that scenario table
-#' conforms to the return value for this function: an `id` column, and all the
+#' conforms to the return value for this function: `scen_id` column, and all the
 #' unique combinations of feature columns.
 #'
 #' @return a [data.table()] with an `id` column and where all other columns form
@@ -48,6 +48,23 @@ scn_extract <- function(
   return(scen_dt[])
 }
 
+#' @title Validate a Potential Scenario Table
+#'
+#' @param scen_dt a data.table, such as would be returned by [scn_extract()].
+#' If the `scen_dt` does conform to the requirements for a scenario table,
+#' throws an informative error.
+#'
+#' @return for convenience, returns `scen_dt` unmodified (if validated)
+#'
+#' @export
+scn_validate <- function(scen_dt) {
+  if (!is.data.table(scen_dt)) stop("`scen_dt` is not a data.table.")
+  if (!("scen_id" %in% names(scen_dt))) stop("`scen_dt` does not have a `scen_id` column.")
+  if (!scen_dt[, all(seq_len(.N ) == scen_id)]) stop("`scen_dt` is not a integer sequence from 1 to N, the number of scenarios.")
+  if (scen_dt[, unique(.SD), .SDcols = -c("scen_id")][, .N] != scen_dt[, .N]) stop("the scenario columns are non-unique.")
+  scen_dt
+}
+
 #' @title Convert Data to be Keyed by Scenario
 #'
 #' This method takes data which has existing scenario columns, and returns that
@@ -67,7 +84,7 @@ scn_convert <- function(
   data, scen_dt, keep = setdiff(names(data), names(scen_dt))
 ) {
   scencols <- setdiff(names(scen_dt), "scen_id")
-  data[scen_dt, on = scencols][, .SD, .SDcols = keep]
+  data[scen_dt, on = scencols][, .SD, .SDcols = c("scen_id", keep)]
 }
 
 #' @title Create a Scenario Analysis Plan
@@ -83,7 +100,10 @@ scn_convert <- function(
 #' become the reference values
 #'
 #' @param ignore other columns that can be ignored when matching `baseline`. The
-#' `scen_id` column is always automatically ignored
+#' `scen_id` column is always automatically ignored. This is useful when some of
+#' your scenario features are irrelevant when running the baseline scenario
+#' (e.g. vaccine efficacy, when no vaccine is distributed in the baseline case)
+#' and therefore there are not any corresponding baseline runs with this feature
 #'
 #' @return a data.table, with columns `comp`(arison) and `base`(line), both
 #' integer id columns, corresponding to values from `scen_dt`
@@ -93,6 +113,7 @@ scn_convert <- function(
 scn_plan <- function(
   scen_dt, baseline, ignore = c()
 ) {
+
   # these are the features to be used with `on = c(matchon)`
   matchon <- setdiff(names(scen_dt), c("scen_id", names(baseline), ignore))
   # create the filter
@@ -100,20 +121,39 @@ scn_plan <- function(
     paste(sprintf(pat, col), collapse = " & ")
   ] |> parse(text = _)
   base_dt <- scen_dt[eval(reffilter), .SD, .SDcols = c("scen_id", matchon)]
-  scen_dt[!eval(reffilter)][base_dt, on = c(matchon), .(comp = scen_id, base = i.scen_id)][]
+  res_dt <- scen_dt[!eval(reffilter)][base_dt, on = c(matchon), .(comp = scen_id, base = i.scen_id)]
+
+  if (res_dt[, .N, by = comp][, any(N > 1)]) {
+    stop("some comparison scenarios matched to multiple baselines")
+  }
+
+  if (res_dt[, unique(c(comp, base)) |> length()] != scen_dt$scen_id |> length()) {
+    # TODO: more detailed warning if about which scenarios missing
+    warning("incomplete scenario specification")
+  }
+
+  return(res_dt[])
 }
 
-#' @title title
+#' @title Create an Analysis Grid
 #'
-#' @return a reduced view of `data`, replacing all scenario information with a
-#' `scen_id` column.
+#' @description
+#' Creates a tabular view of outputs based on a comparison plan + matched output
+#' features
 #'
 #' @export
-scn_outcomes <- function(
-  data, scen_dt
+scn_grid <- function(
+  data, plan, match_by = key(data)
 ) {
-  scencols <- setdiff(names(scen_dt), "scen_id")
-  data[scen_dt, on = scencols][, .SD, .SDcols = -scencols]
+  meascols <- setdiff(names(data), c("scen_id", match_by))
+  colord <- c(match_by, "comp", "base", meascols, sprintf("i.%s", meascols))
+
+  return((data[
+    plan, on = .(scen_id = comp), nomatch = 0
+  ] |> setnames(old = c("scen_id", "base"), new = c("comp", "scen_id")))[
+    data, on = c(match_by, "scen_id"), nomatch = 0
+  ] |> setnames("scen_id", "base") |> setcolorder(colord))
+
 }
 
 #' @title Execute Scenario Analysis
@@ -122,32 +162,58 @@ scn_outcomes <- function(
 #' Conduct a scenario analysis according to a particular comparison plan, for
 #' a set of given comparisons, optionally summarized.
 #'
-#' @param outcomes_dt a set of outputs, as produced by [scn_outcomes()]
+#' @param outcomes a set of outputs, as produced by [scn_outcomes()]
+#'
+#' @param plan pairwise scenario ids, as produced by [scn_plan()]: the
+#' comparison plan
+#'
+#' @param compare optional, a list; names correspond to columns that will be
+#' created, and the elements should be expressions to evaluate. `compare`
+#' operations should be vectorized, but can use aggregating elements, and will
+#' be applied by scenario pairs and any `group` argument.
+#'
+#' @param summarize optional, a list; names correspond to columns that will be
+#' created and the elements should be expressions to evaluate. The operations
+#' should yield scalar results per group. This will be evaluated after `compare`
+#' so any columns it creates will be available.
+#'
+#' @param group when performing compare or summarize operations, how to group
+#' those operations for any group-wise calculations. Operations are always
+#' performed by scenario id pairs, and this parameter is for additional grouping
+#'
+#' @return a data.table
 #'
 #' @importFrom data.table melt.data.table
 #' @importFrom data.table setnames
-#' @export
 scn_analyze <- function(
   outcomes, plan,
   compare, summarize,
-  inputs, group,
-  joinon = setdiff(names(outcomes), inputs)
+  group = list(compare = c(), summarize = c()),
+  joinon = key(outcomes)
 ) {
+
+  if (missing(compare) & missing(summarize)) stop("must provide at least one of `compare` and `summarize`.")
 
   grid_dt <- (outcomes[
     plan, on = .(scen_id = comp), nomatch = 0
-  ] |> setnames(c("scen_id", "base"), c("comp", "scen_id")))[
-    outcomes, on = c(joinon), nomatch = 0
-  ]
+  ] |> setnames(old = c("scen_id", "base"), new = c("comp", "scen_id")))[
+    outcomes, on = c(joinon, "scen_id"), nomatch = 0
+  ] |> setnames("scen_id", "base")
 
-  grid_dt[, c(names(compare)) := lapply(compare, \(f) eval(f)), by = c(c("comp", "scen_id"), group)]
-  res_dt <- grid_dt[, .SD, .SDcols = c(joinon, "comp", names(compare))] |> setnames("scen_id", "base")
+  if (!missing(compare)) {
+    grid_dt[,
+      c(names(compare)) := lapply(compare, \(f) eval(f)),
+      by = c(c("comp", "base"), group$compare)
+    ]
+  }
 
   if (missing(summarize)) {
-    return(res_dt)
+    return(grid_dt[, .SD, .SDcols = c(key(outcomes), "comp", "base", names(compare))])
   } else {
-    res_dt <- res_dt |> melt.data.table(measure.vars = names(compare), variable.name = "measure")
-    res_dt[, summarize(value), by = c(setdiff(joinon, c(group, "scen_id")), "base", "comp", "measure")]
+    grid_dt[,
+      c(names(summarize)) := lapply(summarize, \(f) eval(f)),
+      by = c(c("comp", "base"), group$summarize)
+    ]
   }
 
 }
