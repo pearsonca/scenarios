@@ -2,10 +2,7 @@
 % Please edit documentation in R/extract.R
 \name{scn_convert}
 \alias{scn_convert}
-\title{Convert Data to be Keyed by Scenario
-
-This method takes data which has existing scenario columns, and returns that
-data converted to be in terms of the scenario keys.}
+\title{Convert Data to be Keyed by Scenario}
 \usage{
 scn_convert(data, scen_dt, keep = setdiff(names(data), names(scen_dt)))
 }
@@ -21,8 +18,6 @@ that are \emph{not} defining scenarios.}
 a data.table, with columns \code{keep} + \code{scen_id}
 }
 \description{
-Convert Data to be Keyed by Scenario
-
 This method takes data which has existing scenario columns, and returns that
 data converted to be in terms of the scenario keys.
 }

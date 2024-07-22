@@ -67,6 +67,7 @@ scn_validate <- function(scen_dt) {
 
 #' @title Convert Data to be Keyed by Scenario
 #'
+#' @description
 #' This method takes data which has existing scenario columns, and returns that
 #' data converted to be in terms of the scenario keys.
 #'
